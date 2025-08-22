@@ -269,6 +269,78 @@ If you don't have Docker, you can use `go build` to build the binary in the
 }
 ```
 
+#### User-Specific Access Control
+
+The GitHub MCP Server now supports user-specific repository access control. When configured with a user email, the server will initialize with access validation that restricts operations to repositories the specified user can access.
+
+##### Configuration Options
+
+**Command Line Flag:**
+```bash
+github-mcp-server stdio --user-email="your-email@example.com"
+```
+
+**Environment Variable:**
+```bash
+export GITHUB_USER_EMAIL="your-email@example.com"
+export GITHUB_PERSONAL_ACCESS_TOKEN="your_token_here"
+github-mcp-server stdio
+```
+
+**MCP Configuration with User Email:**
+```JSON
+{
+  "mcp": {
+    "servers": {
+      "github": {
+        "command": "/path/to/github-mcp-server",
+        "args": ["stdio", "--user-email", "your-email@example.com"],
+        "env": {
+          "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+        }
+      }
+    }
+  }
+}
+```
+
+**MCP Configuration with Environment Variables:**
+```JSON
+{
+  "mcp": {
+    "servers": {
+      "github": {
+        "command": "/path/to/github-mcp-server",
+        "args": ["stdio"],
+        "env": {
+          "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
+          "GITHUB_USER_EMAIL": "<USER_EMAIL>"
+        }
+      }
+    }
+  }
+}
+```
+
+##### How Access Control Works
+
+When a user email is provided:
+
+1. **Initialization**: The server fetches all repositories accessible to the authenticated user at startup
+2. **Access Validation**: Before executing any repository-specific operation, the server validates that the target repository is in the user's accessible repository list
+3. **Security**: If access is denied, the operation fails with a clear error message indicating insufficient permissions
+
+This ensures that AI tools can only operate on repositories that the authenticated user has legitimate access to, providing an additional layer of security and preventing unauthorized repository access.
+
+##### Environment Variable Fallbacks
+
+The server supports environment variable fallbacks for both authentication and user identification:
+
+- **`GITHUB_PERSONAL_ACCESS_TOKEN`**: Used when no token is provided via command line arguments
+- **`GITHUB_USER_EMAIL`**: Used when no user email is provided via the `--user-email` flag
+
+This allows for flexible deployment configurations while maintaining security best practices.
+
 ## Tool Configuration
 
 The GitHub MCP Server supports enabling or disabling specific groups of functionalities via the `--toolsets` flag. This allows you to control which GitHub API capabilities are available to your AI tools. Enabling only the toolsets that you need can help the LLM with tool choice and reduce the context size.

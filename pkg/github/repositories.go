@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/github/github-mcp-server/pkg/access"
 	ghErrors "github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/raw"
 	"github.com/github/github-mcp-server/pkg/translations"
@@ -487,6 +488,578 @@ func CreateBranch(getClient GetClientFn, t translations.TranslationHelperFunc) (
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			branch, err := RequiredParam[string](request, "branch")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			fromBranch, err := OptionalParam[string](request, "from_branch")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			client, err := getClient(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get GitHub client: %w", err)
+			}
+
+			// Get the source branch SHA
+			var ref *github.Reference
+
+			if fromBranch == "" {
+				// Get default branch if from_branch not specified
+				repository, resp, err := client.Repositories.Get(ctx, owner, repo)
+				if err != nil {
+					return ghErrors.NewGitHubAPIErrorResponse(ctx,
+						"failed to get repository",
+						resp,
+						err,
+					), nil
+				}
+				defer func() { _ = resp.Body.Close() }()
+
+				fromBranch = *repository.DefaultBranch
+			}
+
+			// Get SHA of source branch
+			ref, resp, err := client.Git.GetRef(ctx, owner, repo, "refs/heads/"+fromBranch)
+			if err != nil {
+				return ghErrors.NewGitHubAPIErrorResponse(ctx,
+					"failed to get reference",
+					resp,
+					err,
+				), nil
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			// Create new branch
+			newRef := &github.Reference{
+				Ref:    github.Ptr("refs/heads/" + branch),
+				Object: &github.GitObject{SHA: ref.Object.SHA},
+			}
+
+			createdRef, resp, err := client.Git.CreateRef(ctx, owner, repo, newRef)
+			if err != nil {
+				return ghErrors.NewGitHubAPIErrorResponse(ctx,
+					"failed to create branch",
+					resp,
+					err,
+				), nil
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			r, err := json.Marshal(createdRef)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+// GetFileContentsWithValidation creates a tool to get the contents of a file or directory from a GitHub repository with access validation.
+func GetFileContentsWithValidation(getClient GetClientFn, getRawClient raw.GetRawClientFn, t translations.TranslationHelperFunc, validator *access.Validator) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_file_contents",
+			mcp.WithDescription(t("TOOL_GET_FILE_CONTENTS_DESCRIPTION", "Get the contents of a file or directory from a GitHub repository")),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				Title:        t("TOOL_GET_FILE_CONTENTS_USER_TITLE", "Get file or directory contents"),
+				ReadOnlyHint: ToBoolPtr(true),
+			}),
+			mcp.WithString("owner",
+				mcp.Required(),
+				mcp.Description("Repository owner (username or organization)"),
+			),
+			mcp.WithString("repo",
+				mcp.Required(),
+				mcp.Description("Repository name"),
+			),
+			mcp.WithString("path",
+				mcp.Description("Path to file/directory (directories must end with a slash '/')"),
+				mcp.DefaultString("/"),
+			),
+			mcp.WithString("ref",
+				mcp.Description("Accepts optional git refs such as `refs/tags/{tag}`, `refs/heads/{branch}` or `refs/pull/{pr_number}/head`"),
+			),
+			mcp.WithString("sha",
+				mcp.Description("Accepts optional commit SHA. If specified, it will be used instead of ref"),
+			),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			owner, err := RequiredParam[string](request, "owner")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			repo, err := RequiredParam[string](request, "repo")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// ACCESS VALIDATION: Check if the repository is accessible
+			repoURL := fmt.Sprintf("github.com/%s/%s", owner, repo)
+			accessible, err := validator.IsRepositoryAccessible(repoURL)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to validate repository access: %s", err.Error())), nil
+			}
+			if !accessible {
+				return mcp.NewToolResultError(fmt.Sprintf("Access denied: Repository %s/%s is not accessible to the current user", owner, repo)), nil
+			}
+
+			path, err := RequiredParam[string](request, "path")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			ref, err := OptionalParam[string](request, "ref")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			sha, err := OptionalParam[string](request, "sha")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			client, err := getClient(ctx)
+			if err != nil {
+				return mcp.NewToolResultError("failed to get GitHub client"), nil
+			}
+
+			rawOpts, err := resolveGitReference(ctx, client, owner, repo, ref, sha)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to resolve git reference: %s", err)), nil
+			}
+
+			// If the path is (most likely) not to be a directory, we will
+			// first try to get the raw content from the GitHub raw content API.
+			if path != "" && !strings.HasSuffix(path, "/") {
+				// First, get file info from Contents API to retrieve SHA
+				var fileSHA string
+				opts := &github.RepositoryContentGetOptions{Ref: ref}
+				fileContent, _, respContents, err := client.Repositories.GetContents(ctx, owner, repo, path, opts)
+				if respContents != nil {
+					defer func() { _ = respContents.Body.Close() }()
+				}
+				if err != nil {
+					return ghErrors.NewGitHubAPIErrorResponse(ctx,
+						"failed to get file SHA",
+						respContents,
+						err,
+					), nil
+				}
+				if fileContent == nil || fileContent.SHA == nil {
+					return mcp.NewToolResultError("file content SHA is nil"), nil
+				}
+				fileSHA = *fileContent.SHA
+
+				rawClient, err := getRawClient(ctx)
+				if err != nil {
+					return mcp.NewToolResultError("failed to get GitHub raw content client"), nil
+				}
+				resp, err := rawClient.GetRawContent(ctx, owner, repo, path, rawOpts)
+				if err != nil {
+					return mcp.NewToolResultError("failed to get raw repository content"), nil
+				}
+				defer func() {
+					_ = resp.Body.Close()
+				}()
+
+				if resp.StatusCode == http.StatusOK {
+					// If the raw content is found, return it directly
+					body, err := io.ReadAll(resp.Body)
+					if err != nil {
+						return mcp.NewToolResultError("failed to read response body"), nil
+					}
+					contentType := resp.Header.Get("Content-Type")
+
+					var resourceURI string
+					switch {
+					case sha != "":
+						resourceURI, err = url.JoinPath("repo://", owner, repo, "sha", sha, "contents", path)
+						if err != nil {
+							return nil, fmt.Errorf("failed to create resource URI: %w", err)
+						}
+					case ref != "":
+						resourceURI, err = url.JoinPath("repo://", owner, repo, ref, "contents", path)
+						if err != nil {
+							return nil, fmt.Errorf("failed to create resource URI: %w", err)
+						}
+					default:
+						resourceURI, err = url.JoinPath("repo://", owner, repo, "contents", path)
+						if err != nil {
+							return nil, fmt.Errorf("failed to create resource URI: %w", err)
+						}
+					}
+
+					if strings.HasPrefix(contentType, "application") || strings.HasPrefix(contentType, "text") {
+						result := mcp.TextResourceContents{
+							URI:      resourceURI,
+							Text:     string(body),
+							MIMEType: contentType,
+						}
+						// Include SHA in the result metadata
+						if fileSHA != "" {
+							return mcp.NewToolResultResource(fmt.Sprintf("successfully downloaded text file (SHA: %s)", fileSHA), result), nil
+						}
+						return mcp.NewToolResultResource("successfully downloaded text file", result), nil
+					}
+
+					result := mcp.BlobResourceContents{
+						URI:      resourceURI,
+						Blob:     base64.StdEncoding.EncodeToString(body),
+						MIMEType: contentType,
+					}
+					// Include SHA in the result metadata
+					if fileSHA != "" {
+						return mcp.NewToolResultResource(fmt.Sprintf("successfully downloaded binary file (SHA: %s)", fileSHA), result), nil
+					}
+					return mcp.NewToolResultResource("successfully downloaded binary file", result), nil
+
+				}
+			}
+
+			if rawOpts.SHA != "" {
+				ref = rawOpts.SHA
+			}
+			if strings.HasSuffix(path, "/") {
+				opts := &github.RepositoryContentGetOptions{Ref: ref}
+				_, dirContent, resp, err := client.Repositories.GetContents(ctx, owner, repo, path, opts)
+				if err == nil && resp.StatusCode == http.StatusOK {
+					defer func() { _ = resp.Body.Close() }()
+					r, err := json.Marshal(dirContent)
+					if err != nil {
+						return mcp.NewToolResultError("failed to marshal response"), nil
+					}
+					return mcp.NewToolResultText(string(r)), nil
+				}
+			}
+
+			opts := &github.RepositoryContentGetOptions{Ref: ref}
+			file, _, resp, err := client.Repositories.GetContents(ctx, owner, repo, path, opts)
+			if err != nil {
+				return ghErrors.NewGitHubAPIErrorResponse(ctx,
+					"failed to get file contents",
+					resp,
+					err,
+				), nil
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			r, err := json.Marshal(file)
+			if err != nil {
+				return mcp.NewToolResultError("failed to marshal response"), nil
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func GetCommitWithValidation(getClient GetClientFn, t translations.TranslationHelperFunc, validator *access.Validator) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("get_commit",
+		mcp.WithDescription(t("TOOL_GET_COMMITS_DESCRIPTION", "Get details for a commit from a GitHub repository")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{
+			Title:        t("TOOL_GET_COMMITS_USER_TITLE", "Get commit details"),
+			ReadOnlyHint: ToBoolPtr(true),
+		}),
+		mcp.WithString("owner",
+			mcp.Required(),
+			mcp.Description("Repository owner"),
+		),
+		mcp.WithString("repo",
+			mcp.Required(),
+			mcp.Description("Repository name"),
+		),
+		mcp.WithString("sha",
+			mcp.Required(),
+			mcp.Description("Commit SHA, branch name, or tag name"),
+		),
+		WithPagination(),
+	),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			owner, err := RequiredParam[string](request, "owner")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			repo, err := RequiredParam[string](request, "repo")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// ACCESS VALIDATION: Check if the repository is accessible
+			repoURL := fmt.Sprintf("github.com/%s/%s", owner, repo)
+			accessible, err := validator.IsRepositoryAccessible(repoURL)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to validate repository access: %s", err.Error())), nil
+			}
+			if !accessible {
+				return mcp.NewToolResultError(fmt.Sprintf("Access denied: Repository %s/%s is not accessible to the current user", owner, repo)), nil
+			}
+
+			sha, err := RequiredParam[string](request, "sha")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			pagination, err := OptionalPaginationParams(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			opts := &github.ListOptions{
+				Page:    pagination.Page,
+				PerPage: pagination.PerPage,
+			}
+
+			client, err := getClient(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get GitHub client: %w", err)
+			}
+			commit, resp, err := client.Repositories.GetCommit(ctx, owner, repo, sha, opts)
+			if err != nil {
+				return ghErrors.NewGitHubAPIErrorResponse(ctx,
+					fmt.Sprintf("failed to get commit: %s", sha),
+					resp,
+					err,
+				), nil
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			if resp.StatusCode != 200 {
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return nil, fmt.Errorf("failed to read response body: %w", err)
+				}
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get commit: %s", string(body))), nil
+			}
+
+			r, err := json.Marshal(commit)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func ListCommitsWithValidation(getClient GetClientFn, t translations.TranslationHelperFunc, validator *access.Validator) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("list_commits",
+		mcp.WithDescription(t("TOOL_LIST_COMMITS_DESCRIPTION", "Get list of commits of a branch in a GitHub repository. Returns at least 30 results per page by default, but can return more if specified using the perPage parameter (up to 100).")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{
+			Title:        t("TOOL_LIST_COMMITS_USER_TITLE", "List commits"),
+			ReadOnlyHint: ToBoolPtr(true),
+		}),
+		mcp.WithString("owner",
+			mcp.Required(),
+			mcp.Description("Repository owner"),
+		),
+		mcp.WithString("repo",
+			mcp.Required(),
+			mcp.Description("Repository name"),
+		),
+		mcp.WithString("sha",
+			mcp.Description("Commit SHA, branch or tag name to list commits of. If not provided, uses the default branch of the repository. If a commit SHA is provided, will list commits up to that SHA."),
+		),
+		mcp.WithString("author",
+			mcp.Description("Author username or email address to filter commits by"),
+		),
+		WithPagination(),
+	),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			owner, err := RequiredParam[string](request, "owner")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			repo, err := RequiredParam[string](request, "repo")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// ACCESS VALIDATION: Check if the repository is accessible
+			repoURL := fmt.Sprintf("github.com/%s/%s", owner, repo)
+			accessible, err := validator.IsRepositoryAccessible(repoURL)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to validate repository access: %s", err.Error())), nil
+			}
+			if !accessible {
+				return mcp.NewToolResultError(fmt.Sprintf("Access denied: Repository %s/%s is not accessible to the current user", owner, repo)), nil
+			}
+
+			sha, err := OptionalParam[string](request, "sha")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			author, err := OptionalParam[string](request, "author")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			pagination, err := OptionalPaginationParams(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			// Set default perPage to 30 if not provided
+			perPage := pagination.PerPage
+			if perPage == 0 {
+				perPage = 30
+			}
+			opts := &github.CommitsListOptions{
+				SHA:    sha,
+				Author: author,
+				ListOptions: github.ListOptions{
+					Page:    pagination.Page,
+					PerPage: perPage,
+				},
+			}
+
+			client, err := getClient(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get GitHub client: %w", err)
+			}
+			commits, resp, err := client.Repositories.ListCommits(ctx, owner, repo, opts)
+			if err != nil {
+				return ghErrors.NewGitHubAPIErrorResponse(ctx,
+					"failed to list commits",
+					resp,
+					err,
+				), nil
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			if resp.StatusCode != 200 {
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return nil, fmt.Errorf("failed to read response body: %w", err)
+				}
+				return mcp.NewToolResultError(fmt.Sprintf("failed to list commits: %s", string(body))), nil
+			}
+
+			r, err := json.Marshal(commits)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func ListBranchesWithValidation(getClient GetClientFn, t translations.TranslationHelperFunc, validator *access.Validator) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("list_branches",
+		mcp.WithDescription(t("TOOL_LIST_BRANCHES_DESCRIPTION", "List branches in a GitHub repository")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{
+			Title:        t("TOOL_LIST_BRANCHES_USER_TITLE", "List branches"),
+			ReadOnlyHint: ToBoolPtr(true),
+		}),
+		mcp.WithString("owner",
+			mcp.Required(),
+			mcp.Description("Repository owner"),
+		),
+		mcp.WithString("repo",
+			mcp.Required(),
+			mcp.Description("Repository name"),
+		),
+		WithPagination(),
+	),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			owner, err := RequiredParam[string](request, "owner")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			repo, err := RequiredParam[string](request, "repo")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// ACCESS VALIDATION: Check if the repository is accessible
+			repoURL := fmt.Sprintf("github.com/%s/%s", owner, repo)
+			accessible, err := validator.IsRepositoryAccessible(repoURL)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to validate repository access: %s", err.Error())), nil
+			}
+			if !accessible {
+				return mcp.NewToolResultError(fmt.Sprintf("Access denied: Repository %s/%s is not accessible to the current user", owner, repo)), nil
+			}
+
+			pagination, err := OptionalPaginationParams(request)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			opts := &github.BranchListOptions{
+				ListOptions: github.ListOptions{
+					Page:    pagination.Page,
+					PerPage: pagination.PerPage,
+				},
+			}
+
+			client, err := getClient(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get GitHub client: %w", err)
+			}
+
+			branches, resp, err := client.Repositories.ListBranches(ctx, owner, repo, opts)
+			if err != nil {
+				return ghErrors.NewGitHubAPIErrorResponse(ctx,
+					"failed to list branches",
+					resp,
+					err,
+				), nil
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			if resp.StatusCode != http.StatusOK {
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return nil, fmt.Errorf("failed to read response body: %w", err)
+				}
+				return mcp.NewToolResultError(fmt.Sprintf("failed to list branches: %s", string(body))), nil
+			}
+
+			r, err := json.Marshal(branches)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal response: %w", err)
+			}
+
+			return mcp.NewToolResultText(string(r)), nil
+		}
+}
+
+func CreateBranchWithValidation(getClient GetClientFn, t translations.TranslationHelperFunc, validator *access.Validator) (tool mcp.Tool, handler server.ToolHandlerFunc) {
+	return mcp.NewTool("create_branch",
+		mcp.WithDescription(t("TOOL_CREATE_BRANCH_DESCRIPTION", "Create a new branch in a GitHub repository")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{
+			Title:        t("TOOL_CREATE_BRANCH_USER_TITLE", "Create branch"),
+			ReadOnlyHint: ToBoolPtr(false),
+		}),
+		mcp.WithString("owner",
+			mcp.Required(),
+			mcp.Description("Repository owner"),
+		),
+		mcp.WithString("repo",
+			mcp.Required(),
+			mcp.Description("Repository name"),
+		),
+		mcp.WithString("branch",
+			mcp.Required(),
+			mcp.Description("Name for new branch"),
+		),
+		mcp.WithString("from_branch",
+			mcp.Description("Source branch (defaults to repo default)"),
+		),
+	),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			owner, err := RequiredParam[string](request, "owner")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			repo, err := RequiredParam[string](request, "repo")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			// ACCESS VALIDATION: Check if the repository is accessible
+			repoURL := fmt.Sprintf("github.com/%s/%s", owner, repo)
+			accessible, err := validator.IsRepositoryAccessible(repoURL)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to validate repository access: %s", err.Error())), nil
+			}
+			if !accessible {
+				return mcp.NewToolResultError(fmt.Sprintf("Access denied: Repository %s/%s is not accessible to the current user", owner, repo)), nil
+			}
+
 			branch, err := RequiredParam[string](request, "branch")
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil

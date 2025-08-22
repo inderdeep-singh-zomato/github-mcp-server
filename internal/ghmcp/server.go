@@ -13,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/github/github-mcp-server/pkg/access"
 	"github.com/github/github-mcp-server/pkg/errors"
 	"github.com/github/github-mcp-server/pkg/github"
 	mcplog "github.com/github/github-mcp-server/pkg/log"
@@ -33,6 +34,9 @@ type MCPServerConfig struct {
 
 	// GitHub Token to authenticate with the GitHub API
 	Token string
+
+	// User Email for repository access validation
+	UserEmail string
 
 	// EnabledToolsets is a list of toolsets to enable
 	// See: https://github.com/github/github-mcp-server?tab=readme-ov-file#tool-configuration
@@ -65,6 +69,12 @@ func NewMCPServer(cfg MCPServerConfig) (*server.MCPServer, error) {
 	restClient.UserAgent = fmt.Sprintf("github-mcp-server/%s", cfg.Version)
 	restClient.BaseURL = apiHost.baseRESTURL
 	restClient.UploadURL = apiHost.uploadURL
+
+	// Create and initialize the Access Validator (blocking operation)
+	validator := access.NewValidator(restClient, cfg.UserEmail)
+	if err := validator.Initialize(); err != nil {
+		return nil, fmt.Errorf("failed to initialize access validator: %w", err)
+	}
 
 	// Construct our GraphQL client
 	// We're using NewEnterpriseClient here unconditionally as opposed to NewClient because we already
@@ -135,7 +145,7 @@ func NewMCPServer(cfg MCPServerConfig) (*server.MCPServer, error) {
 	}
 
 	// Create default toolsets
-	tsg := github.DefaultToolsetGroup(cfg.ReadOnly, getClient, getGQLClient, getRawClient, cfg.Translator, cfg.ContentWindowSize)
+	tsg := github.DefaultToolsetGroup(cfg.ReadOnly, getClient, getGQLClient, getRawClient, cfg.Translator, cfg.ContentWindowSize, validator)
 	err = tsg.EnableToolsets(enabledToolsets)
 
 	if err != nil {
@@ -162,6 +172,9 @@ type StdioServerConfig struct {
 
 	// GitHub Token to authenticate with the GitHub API
 	Token string
+
+	// User Email for repository access validation
+	UserEmail string
 
 	// EnabledToolsets is a list of toolsets to enable
 	// See: https://github.com/github/github-mcp-server?tab=readme-ov-file#tool-configuration
@@ -200,6 +213,7 @@ func RunStdioServer(cfg StdioServerConfig) error {
 		Version:           cfg.Version,
 		Host:              cfg.Host,
 		Token:             cfg.Token,
+		UserEmail:         cfg.UserEmail,
 		EnabledToolsets:   cfg.EnabledToolsets,
 		DynamicToolsets:   cfg.DynamicToolsets,
 		ReadOnly:          cfg.ReadOnly,

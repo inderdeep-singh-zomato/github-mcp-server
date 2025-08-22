@@ -31,9 +31,22 @@ var (
 		Short: "Start stdio server",
 		Long:  `Start a server that communicates via standard input/output streams using JSON-RPC messages.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
+			userEmail := viper.GetString("user_email")
+			if userEmail == "" {
+				// Check environment variable as fallback
+				userEmail = os.Getenv("GITHUB_USER_EMAIL")
+				if userEmail == "" {
+					return errors.New("USER_EMAIL not provided in input or environment variable GITHUB_USER_EMAIL")
+				}
+			}
+
 			token := viper.GetString("personal_access_token")
 			if token == "" {
-				return errors.New("GITHUB_PERSONAL_ACCESS_TOKEN not set")
+				// Fallback to environment variable
+				token = os.Getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
+				if token == "" {
+					return errors.New("GITHUB_PERSONAL_ACCESS_TOKEN not provided in input or environment")
+				}
 			}
 
 			// If you're wondering why we're not using viper.GetStringSlice("toolsets"),
@@ -49,6 +62,7 @@ var (
 				Version:              version,
 				Host:                 viper.GetString("host"),
 				Token:                token,
+				UserEmail:            userEmail,
 				EnabledToolsets:      enabledToolsets,
 				DynamicToolsets:      viper.GetBool("dynamic_toolsets"),
 				ReadOnly:             viper.GetBool("read-only"),
@@ -76,6 +90,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("enable-command-logging", false, "When enabled, the server will log all command requests and responses to the log file")
 	rootCmd.PersistentFlags().Bool("export-translations", false, "Save translations to a JSON file")
 	rootCmd.PersistentFlags().String("gh-host", "", "Specify the GitHub hostname (for GitHub Enterprise etc.)")
+	rootCmd.PersistentFlags().String("user-email", "", "User email for repository access validation (fallback: GITHUB_USER_EMAIL env var)")
 	rootCmd.PersistentFlags().Int("content-window-size", 5000, "Specify the content window size")
 
 	// Bind flag to viper
@@ -86,6 +101,7 @@ func init() {
 	_ = viper.BindPFlag("enable-command-logging", rootCmd.PersistentFlags().Lookup("enable-command-logging"))
 	_ = viper.BindPFlag("export-translations", rootCmd.PersistentFlags().Lookup("export-translations"))
 	_ = viper.BindPFlag("host", rootCmd.PersistentFlags().Lookup("gh-host"))
+	_ = viper.BindPFlag("user_email", rootCmd.PersistentFlags().Lookup("user-email"))
 	_ = viper.BindPFlag("content-window-size", rootCmd.PersistentFlags().Lookup("content-window-size"))
 
 	// Add subcommands

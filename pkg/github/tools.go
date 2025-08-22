@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 
+	"github.com/github/github-mcp-server/pkg/access"
 	"github.com/github/github-mcp-server/pkg/raw"
 	"github.com/github/github-mcp-server/pkg/toolsets"
 	"github.com/github/github-mcp-server/pkg/translations"
@@ -16,7 +17,7 @@ type GetGQLClientFn func(context.Context) (*githubv4.Client, error)
 
 var DefaultTools = []string{"all"}
 
-func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetGQLClientFn, getRawClient raw.GetRawClientFn, t translations.TranslationHelperFunc, contentWindowSize int) *toolsets.ToolsetGroup {
+func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetGQLClientFn, getRawClient raw.GetRawClientFn, t translations.TranslationHelperFunc, contentWindowSize int, validator *access.Validator) *toolsets.ToolsetGroup {
 	tsg := toolsets.NewToolsetGroup(readOnly)
 
 	// Define all available features with their default state (disabled)
@@ -24,11 +25,11 @@ func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetG
 	repos := toolsets.NewToolset("repos", "GitHub Repository related tools").
 		AddReadTools(
 			toolsets.NewServerTool(SearchRepositories(getClient, t)),
-			toolsets.NewServerTool(GetFileContents(getClient, getRawClient, t)),
-			toolsets.NewServerTool(ListCommits(getClient, t)),
+			toolsets.NewServerTool(GetFileContentsWithValidation(getClient, getRawClient, t, validator)),
+			toolsets.NewServerTool(ListCommitsWithValidation(getClient, t, validator)),
 			toolsets.NewServerTool(SearchCode(getClient, t)),
-			toolsets.NewServerTool(GetCommit(getClient, t)),
-			toolsets.NewServerTool(ListBranches(getClient, t)),
+			toolsets.NewServerTool(GetCommitWithValidation(getClient, t, validator)),
+			toolsets.NewServerTool(ListBranchesWithValidation(getClient, t, validator)),
 			toolsets.NewServerTool(ListTags(getClient, t)),
 			toolsets.NewServerTool(GetTag(getClient, t)),
 			toolsets.NewServerTool(ListReleases(getClient, t)),
@@ -36,7 +37,7 @@ func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetG
 			toolsets.NewServerTool(GetReleaseByTag(getClient, t)),
 		).
 		AddWriteTools(
-			toolsets.NewServerTool(CreateBranch(getClient, t)),
+			toolsets.NewServerTool(CreateBranchWithValidation(getClient, t, validator)),
 		).
 		AddResourceTemplates(
 			toolsets.NewServerResourceTemplate(GetRepositoryResourceContent(getClient, getRawClient, t)),
