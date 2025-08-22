@@ -521,11 +521,6 @@ The following sets of tools are available (all are on by default):
   - `repo`: Repository name (string, required)
   - `sub_issue_id`: The ID of the sub-issue to add. ID is not the same as issue number (number, required)
 
-- **assign_copilot_to_issue** - Assign Copilot to issue
-  - `issueNumber`: Issue number (number, required)
-  - `owner`: Repository owner (string, required)
-  - `repo`: Repository name (string, required)
-
 - **create_issue** - Open new issue
   - `assignees`: Usernames to assign to this issue (string[], optional)
   - `body`: Issue body content (string, optional)
@@ -569,13 +564,13 @@ The following sets of tools are available (all are on by default):
   - `per_page`: Number of results per page (max 100, default: 30) (number, optional)
   - `repo`: Repository name (string, required)
 
-- **remove_sub_issue** - Remove sub-issue
+REMOVED - **remove_sub_issue** - Remove sub-issue
   - `issue_number`: The number of the parent issue (number, required)
   - `owner`: Repository owner (string, required)
   - `repo`: Repository name (string, required)
   - `sub_issue_id`: The ID of the sub-issue to remove. ID is not the same as issue number (number, required)
 
-- **reprioritize_sub_issue** - Reprioritize sub-issue
+REMOVED - **reprioritize_sub_issue** - Reprioritize sub-issue
   - `after_id`: The ID of the sub-issue to be prioritized after (either after_id OR before_id should be specified) (number, optional)
   - `before_id`: The ID of the sub-issue to be prioritized before (either after_id OR before_id should be specified) (number, optional)
   - `issue_number`: The number of the parent issue (number, required)
@@ -592,7 +587,7 @@ The following sets of tools are available (all are on by default):
   - `repo`: Optional repository name. If provided with owner, only issues for this repository are listed. (string, optional)
   - `sort`: Sort field by number of matches of categories, defaults to best match (string, optional)
 
-- **update_issue** - Edit issue
+REMOVED - **update_issue** - Edit issue
   - `assignees`: New assignees (string[], optional)
   - `body`: New description (string, optional)
   - `issue_number`: Issue number to update (number, required)
@@ -610,7 +605,7 @@ The following sets of tools are available (all are on by default):
 
 <summary>Notifications</summary>
 
-- **dismiss_notification** - Dismiss notification
+REMOVED - **dismiss_notification** - Dismiss notification
   - `state`: The new state of the notification (read/done) (string, optional)
   - `threadID`: The ID of the notification thread (string, required)
 
@@ -626,16 +621,16 @@ The following sets of tools are available (all are on by default):
   - `repo`: Optional repository name. If provided with owner, only notifications for this repository are listed. (string, optional)
   - `since`: Only show notifications updated after the given time (ISO 8601 format) (string, optional)
 
-- **manage_notification_subscription** - Manage notification subscription
+REMOVED - **manage_notification_subscription** - Manage notification subscription
   - `action`: Action to perform: ignore, watch, or delete the notification subscription. (string, required)
   - `notificationID`: The ID of the notification thread. (string, required)
 
-- **manage_repository_notification_subscription** - Manage repository notification subscription
+REMOVED - **manage_repository_notification_subscription** - Manage repository notification subscription
   - `action`: Action to perform: ignore, watch, or delete the repository notification subscription. (string, required)
   - `owner`: The account owner of the repository. (string, required)
   - `repo`: The name of the repository. (string, required)
 
-- **mark_all_notifications_read** - Mark all notifications as read
+REMOVED - **mark_all_notifications_read** - Mark all notifications as read
   - `lastReadAt`: Describes the last point that notifications were checked (optional). Default: Now (string, optional)
   - `owner`: Optional repository owner. If provided with repo, only notifications for this repository are marked as read. (string, optional)
   - `repo`: Optional repository name. If provided with owner, only notifications for this repository are marked as read. (string, optional)
@@ -671,7 +666,7 @@ The following sets of tools are available (all are on by default):
   - `startSide`: For multi-line comments, the starting side of the diff that the comment applies to. LEFT indicates the previous state, RIGHT indicates the new state (string, optional)
   - `subjectType`: The level at which the comment is targeted (string, required)
 
-- **create_and_submit_pull_request_review** - Create and submit a pull request review without comments
+REMOVED - **create_and_submit_pull_request_review** - Create and submit a pull request review without comments
   - `body`: Review comment text (string, required)
   - `commitID`: SHA of commit to review (string, optional)
   - `event`: Review action to perform (string, required)
@@ -743,7 +738,7 @@ The following sets of tools are available (all are on by default):
   - `sort`: Sort by (string, optional)
   - `state`: Filter by state (string, optional)
 
-- **merge_pull_request** - Merge pull request
+REMOVED - **merge_pull_request** - Merge pull request
   - `commit_message`: Extra detail for merge commit (string, optional)
   - `commit_title`: Title for merge commit (string, optional)
   - `merge_method`: Merge method (string, optional)
@@ -772,7 +767,7 @@ The following sets of tools are available (all are on by default):
   - `pullNumber`: Pull request number (number, required)
   - `repo`: Repository name (string, required)
 
-- **update_pull_request** - Edit pull request
+REMOVED - **update_pull_request** - Edit pull request
   - `base`: New base branch name (string, optional)
   - `body`: New description (string, optional)
   - `draft`: Mark pull request as draft (true) or ready for review (false) (boolean, optional)
@@ -784,7 +779,7 @@ The following sets of tools are available (all are on by default):
   - `state`: New state (string, optional)
   - `title`: New title (string, optional)
 
-- **update_pull_request_branch** - Update pull request branch
+REMOVED - **update_pull_request_branch** - Update pull request branch
   - `expectedHeadSha`: The expected SHA of the pull request's HEAD ref (string, optional)
   - `owner`: Repository owner (string, required)
   - `pullNumber`: Pull request number (number, required)
@@ -802,7 +797,7 @@ The following sets of tools are available (all are on by default):
   - `owner`: Repository owner (string, required)
   - `repo`: Repository name (string, required)
 
-- **create_or_update_file** - Create or update file
+REMOVED - **create_or_update_file** - Create or update file
   - `branch`: Branch to create/update the file in (string, required)
   - `content`: Content of the file (string, required)
   - `message`: Commit message (string, required)
@@ -811,20 +806,20 @@ The following sets of tools are available (all are on by default):
   - `repo`: Repository name (string, required)
   - `sha`: Required if updating an existing file. The blob SHA of the file being replaced. (string, optional)
 
-- **create_repository** - Create repository
+REMOVED - **create_repository** - Create repository
   - `autoInit`: Initialize with README (boolean, optional)
   - `description`: Repository description (string, optional)
   - `name`: Repository name (string, required)
   - `private`: Whether repo should be private (boolean, optional)
 
-- **delete_file** - Delete file
+REMOVED - **delete_file** - Delete file
   - `branch`: Branch to delete the file from (string, required)
   - `message`: Commit message (string, required)
   - `owner`: Repository owner (username or organization) (string, required)
   - `path`: Path to the file to delete (string, required)
   - `repo`: Repository name (string, required)
 
-- **fork_repository** - Fork repository
+REMOVED - **fork_repository** - Fork repository
   - `organization`: Organization to fork to (string, optional)
   - `owner`: Repository owner (string, required)
   - `repo`: Repository name (string, required)
@@ -883,7 +878,7 @@ The following sets of tools are available (all are on by default):
   - `perPage`: Results per page for pagination (min 1, max 100) (number, optional)
   - `repo`: Repository name (string, required)
 
-- **push_files** - Push files to repository
+REMOVED - **push_files** - Push files to repository
   - `branch`: Branch to push to (string, required)
   - `files`: Array of file objects to push, each object with path (string) and content (string) (object[], required)
   - `message`: Commit message (string, required)

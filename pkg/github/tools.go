@@ -36,12 +36,7 @@ func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetG
 			toolsets.NewServerTool(GetReleaseByTag(getClient, t)),
 		).
 		AddWriteTools(
-			toolsets.NewServerTool(CreateOrUpdateFile(getClient, t)),
-			toolsets.NewServerTool(CreateRepository(getClient, t)),
-			toolsets.NewServerTool(ForkRepository(getClient, t)),
 			toolsets.NewServerTool(CreateBranch(getClient, t)),
-			toolsets.NewServerTool(PushFiles(getClient, t)),
-			toolsets.NewServerTool(DeleteFile(getClient, t)),
 		).
 		AddResourceTemplates(
 			toolsets.NewServerResourceTemplate(GetRepositoryResourceContent(getClient, getRawClient, t)),
@@ -62,11 +57,7 @@ func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetG
 		AddWriteTools(
 			toolsets.NewServerTool(CreateIssue(getClient, t)),
 			toolsets.NewServerTool(AddIssueComment(getClient, t)),
-			toolsets.NewServerTool(UpdateIssue(getClient, t)),
-			toolsets.NewServerTool(AssignCopilotToIssue(getGQLClient, t)),
 			toolsets.NewServerTool(AddSubIssue(getClient, t)),
-			toolsets.NewServerTool(RemoveSubIssue(getClient, t)),
-			toolsets.NewServerTool(ReprioritizeSubIssue(getClient, t)),
 		).AddPrompts(
 		toolsets.NewServerPrompt(AssignCodingAgentPrompt(t)),
 		toolsets.NewServerPrompt(IssueToFixWorkflowPrompt(t)),
@@ -91,18 +82,11 @@ func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetG
 			toolsets.NewServerTool(GetPullRequestDiff(getClient, t)),
 		).
 		AddWriteTools(
-			toolsets.NewServerTool(MergePullRequest(getClient, t)),
-			toolsets.NewServerTool(UpdatePullRequestBranch(getClient, t)),
 			toolsets.NewServerTool(CreatePullRequest(getClient, t)),
-			toolsets.NewServerTool(UpdatePullRequest(getClient, getGQLClient, t)),
 			toolsets.NewServerTool(RequestCopilotReview(getClient, t)),
 
 			// Reviews
-			toolsets.NewServerTool(CreateAndSubmitPullRequestReview(getGQLClient, t)),
-			toolsets.NewServerTool(CreatePendingPullRequestReview(getGQLClient, t)),
 			toolsets.NewServerTool(AddCommentToPendingReview(getGQLClient, t)),
-			toolsets.NewServerTool(SubmitPendingPullRequestReview(getGQLClient, t)),
-			toolsets.NewServerTool(DeletePendingPullRequestReview(getGQLClient, t)),
 		)
 	codeSecurity := toolsets.NewToolset("code_security", "Code security related tools, such as GitHub Code Scanning").
 		AddReadTools(
@@ -125,12 +109,7 @@ func DefaultToolsetGroup(readOnly bool, getClient GetClientFn, getGQLClient GetG
 			toolsets.NewServerTool(ListNotifications(getClient, t)),
 			toolsets.NewServerTool(GetNotificationDetails(getClient, t)),
 		).
-		AddWriteTools(
-			toolsets.NewServerTool(DismissNotification(getClient, t)),
-			toolsets.NewServerTool(MarkAllNotificationsRead(getClient, t)),
-			toolsets.NewServerTool(ManageNotificationSubscription(getClient, t)),
-			toolsets.NewServerTool(ManageRepositoryNotificationSubscription(getClient, t)),
-		)
+		AddWriteTools()
 
 	discussions := toolsets.NewToolset("discussions", "GitHub Discussions related tools").
 		AddReadTools(

@@ -64,21 +64,16 @@ Available Commands:
   add_issue_comment     Add a comment to an existing issue
   create_branch         Create a new branch in a GitHub repository
   create_issue          Create a new issue in a GitHub repository
-  create_or_update_file Create or update a single file in a GitHub repository
   create_pull_request   Create a new pull request in a GitHub repository
-  create_repository     Create a new GitHub repository in your account
-  fork_repository       Fork a GitHub repository to your account or specified organization
   get_file_contents     Get the contents of a file or directory from a GitHub repository
   get_issue             Get details of a specific issue in a GitHub repository
   get_issue_comments    Get comments for a GitHub issue
   list_commits          Get list of commits of a branch in a GitHub repository
   list_issues           List issues in a GitHub repository with filtering options
-  push_files            Push multiple files to a GitHub repository in a single commit
   search_code           Search for code across GitHub repositories
   search_issues         Search for issues and pull requests across GitHub repositories
   search_repositories   Search for GitHub repositories
   search_users          Search for users on GitHub
-  update_issue          Update an existing issue in a GitHub repository
 
 Flags:
   -h, --help   help for tools
