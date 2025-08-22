@@ -84,24 +84,21 @@ func (v *Validator) GetAccessibleRepositories() []string {
 	return repos
 }
 
-// fetchAccessibleRepositories implements the dummy logic for fetching accessible repositories
-// In a real implementation, this would make GitHub API calls to determine repository access
+// fetchAccessibleRepositories fetches accessible repositories using the resource map service
 func (v *Validator) fetchAccessibleRepositories() ([]string, error) {
-	// Dummy implementation as specified in the requirements
-	// In practice, this would:
-	// 1. Use the GitHub API to fetch user's repositories
-	// 2. Check organization memberships
-	// 3. Verify repository permissions
-	// 4. Handle pagination for large result sets
-
-	dummyRepos := []string{
-		"github.com/user/repo1",
-		"github.com/user/repo2",
-		"github.com/org/public-repo",
-		"github.com/github/github-mcp-server", // Include this repo for testing
+	repos, err := GetAllAccessibleRepos(v.userEmail)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch accessible repositories: %w", err)
 	}
 
-	return dummyRepos, nil
+	// Convert repository structs to normalized URL format
+	repoURLs := make([]string, 0, len(repos))
+	for _, repo := range repos {
+		repoURL := fmt.Sprintf("github.com/%s/%s", repo.GetOrg(), repo.GetRepo())
+		repoURLs = append(repoURLs, repoURL)
+	}
+
+	return repoURLs, nil
 }
 
 // normalizeRepositoryURL converts various GitHub URL formats to a consistent format
