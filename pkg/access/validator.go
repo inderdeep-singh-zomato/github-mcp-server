@@ -5,13 +5,10 @@ import (
 	"net/url"
 	"strings"
 	"sync"
-
-	"github.com/google/go-github/v74/github"
 )
 
 // Validator handles repository access validation for a specific user
 type Validator struct {
-	client          *github.Client
 	userEmail       string
 	accessibleRepos map[string]struct{} // Set implementation for efficient lookups
 	mu              sync.RWMutex
@@ -19,9 +16,8 @@ type Validator struct {
 }
 
 // NewValidator creates a new access validator instance
-func NewValidator(client *github.Client, userEmail string) *Validator {
+func NewValidator(userEmail string) *Validator {
 	return &Validator{
-		client:          client,
 		userEmail:       userEmail,
 		accessibleRepos: make(map[string]struct{}),
 	}

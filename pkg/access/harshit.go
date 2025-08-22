@@ -103,7 +103,7 @@ func GetAllAccessibleRepos(email string) ([]repository, error) {
 			"zomato/member",
 		},
 		SourceNodeProperties: map[string]string{
-			"name": "prakul.jain@zomato.com",
+			"name": email,
 		},
 		Relations: []*pb.TraverseRelation{
 			{

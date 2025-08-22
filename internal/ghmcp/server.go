@@ -71,7 +71,7 @@ func NewMCPServer(cfg MCPServerConfig) (*server.MCPServer, error) {
 	restClient.UploadURL = apiHost.uploadURL
 
 	// Create and initialize the Access Validator (blocking operation)
-	validator := access.NewValidator(restClient, cfg.UserEmail)
+	validator := access.NewValidator(cfg.UserEmail)
 	if err := validator.Initialize(); err != nil {
 		return nil, fmt.Errorf("failed to initialize access validator: %w", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/github/github-mcp-server/internal/ghmcp"
+	"github.com/github/github-mcp-server/pkg/access"
 	"github.com/github/github-mcp-server/pkg/github"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -74,6 +75,54 @@ var (
 			return ghmcp.RunStdioServer(stdioServerConfig)
 		},
 	}
+
+	validateAccessCmd = &cobra.Command{
+		Use:   "validate-access",
+		Short: "Validate repository access for a user",
+		Long:  `Validate whether a user has access to a specific repository based on their email and the repository URL.`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			
+			// Step 1: Extract and validate user-email flag
+			userEmail, err := cmd.Flags().GetString("user-email")
+			if err != nil {
+				return fmt.Errorf("failed to get user-email flag: %w", err)
+			}
+			if userEmail == "" {
+				return errors.New("user-email is required")
+			}
+
+			// Step 2: Extract and validate repo-url flag
+			repoURL, err := cmd.Flags().GetString("repo-url")
+			if err != nil {
+				return fmt.Errorf("failed to get repo-url flag: %w", err)
+			}
+			if repoURL == "" {
+				return errors.New("repo-url is required")
+			}
+
+			// Step 3: Create and initialize validator
+			validator := access.NewValidator(userEmail)
+			
+			if err := validator.Initialize(); err != nil {
+				return fmt.Errorf("failed to initialize validator: %w", err)
+			}
+
+			// Step 4: Check repository access
+			hasAccess, err := validator.IsRepositoryAccessible(repoURL)
+			if err != nil {
+				return fmt.Errorf("failed to validate repository access: %w", err)
+			}
+
+			// Step 5: Output result
+			if hasAccess {
+				fmt.Println("{\"hasAccess\": true}")
+			} else {
+				fmt.Println("{\"hasAccess\": false}")
+			}
+
+			return nil
+		},
+	}
 )
 
 func init() {
@@ -93,6 +142,12 @@ func init() {
 	rootCmd.PersistentFlags().String("user-email", "", "User email for repository access validation (fallback: GITHUB_USER_EMAIL env var)")
 	rootCmd.PersistentFlags().Int("content-window-size", 5000, "Specify the content window size")
 
+	// Add command-specific flags for validate-access command
+	validateAccessCmd.Flags().String("user-email", "", "User email for repository access validation (required)")
+	validateAccessCmd.Flags().String("repo-url", "", "Repository URL to validate access for (required)")
+	validateAccessCmd.MarkFlagRequired("user-email")
+	validateAccessCmd.MarkFlagRequired("repo-url")
+
 	// Bind flag to viper
 	_ = viper.BindPFlag("toolsets", rootCmd.PersistentFlags().Lookup("toolsets"))
 	_ = viper.BindPFlag("dynamic_toolsets", rootCmd.PersistentFlags().Lookup("dynamic-toolsets"))
@@ -106,6 +161,7 @@ func init() {
 
 	// Add subcommands
 	rootCmd.AddCommand(stdioCmd)
+	rootCmd.AddCommand(validateAccessCmd)
 }
 
 func initConfig() {

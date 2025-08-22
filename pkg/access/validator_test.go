@@ -3,27 +3,23 @@ package access
 import (
 	"testing"
 
-	"github.com/google/go-github/v74/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNewValidator(t *testing.T) {
-	client := github.NewClient(nil)
 	userEmail := "test@example.com"
 
-	validator := NewValidator(client, userEmail)
+	validator := NewValidator(userEmail)
 
 	assert.NotNil(t, validator)
 	assert.Equal(t, userEmail, validator.userEmail)
-	assert.Equal(t, client, validator.client)
 	assert.False(t, validator.initialized)
 	assert.NotNil(t, validator.accessibleRepos)
 }
 
 func TestValidator_Initialize(t *testing.T) {
-	client := github.NewClient(nil)
-	validator := NewValidator(client, "test@example.com")
+	validator := NewValidator("test@example.com")
 
 	// First initialization should succeed
 	err := validator.Initialize()
@@ -39,8 +35,7 @@ func TestValidator_Initialize(t *testing.T) {
 }
 
 func TestValidator_IsRepositoryAccessible(t *testing.T) {
-	client := github.NewClient(nil)
-	validator := NewValidator(client, "test@example.com")
+	validator := NewValidator("test@example.com")
 
 	// Should fail when not initialized
 	accessible, err := validator.IsRepositoryAccessible("github.com/user/repo1")
@@ -119,8 +114,7 @@ func TestValidator_IsRepositoryAccessible(t *testing.T) {
 }
 
 func TestValidator_GetAccessibleRepositories(t *testing.T) {
-	client := github.NewClient(nil)
-	validator := NewValidator(client, "test@example.com")
+	validator := NewValidator("test@example.com")
 
 	// Before initialization
 	repos := validator.GetAccessibleRepositories()
@@ -238,8 +232,7 @@ func TestNormalizeRepositoryURL(t *testing.T) {
 }
 
 func TestValidator_ConcurrentAccess(t *testing.T) {
-	client := github.NewClient(nil)
-	validator := NewValidator(client, "test@example.com")
+	validator := NewValidator("test@example.com")
 
 	// Initialize the validator
 	err := validator.Initialize()
