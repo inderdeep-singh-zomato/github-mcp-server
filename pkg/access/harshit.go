@@ -92,7 +92,7 @@ func initialise(authority, endpoint string, tlsEnabled bool) (pb.SyncResourceMap
 }
 
 func GetAllAccessibleRepos(email string) ([]repository, error) {
-	client, err := initialise("es-resource-map-service-v2", "es-resource-map-service-v2.mesh", true)
+	client, err := initialise("", "host.docker.internal:3000", false)
 	if err != nil {
 		return nil, err
 	}
