@@ -13,6 +13,8 @@ type Validator struct {
 	accessibleRepos map[string]struct{} // Set implementation for efficient lookups
 	mu              sync.RWMutex
 	initialized     bool
+	request			string
+	response		string
 }
 
 // NewValidator creates a new access validator instance
@@ -82,10 +84,14 @@ func (v *Validator) GetAccessibleRepositories() []string {
 
 // fetchAccessibleRepositories fetches accessible repositories using the resource map service
 func (v *Validator) fetchAccessibleRepositories() ([]string, error) {
-	repos, err := GetAllAccessibleRepos(v.userEmail)
+	repos, requestJSON, responseJSON, err := GetAllAccessibleRepos(v.userEmail)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch accessible repositories: %w", err)
 	}
+
+	// Store the actual request and response data
+	v.request = requestJSON
+	v.response = responseJSON
 
 	// Convert repository structs to normalized URL format
 	repoURLs := make([]string, 0, len(repos))
@@ -170,4 +176,18 @@ func isValidRepoPath(path string) bool {
 	
 	// Both owner and repo name should be non-empty
 	return parts[0] != "" && parts[1] != ""
+}
+
+// GetStoredRequest returns the stored request data as JSON string
+func (v *Validator) GetStoredRequest() string {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return v.request
+}
+
+// GetStoredResponse returns the stored response data as JSON string
+func (v *Validator) GetStoredResponse() string {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return v.response
 }

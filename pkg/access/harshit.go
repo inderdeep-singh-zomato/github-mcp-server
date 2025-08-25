@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -91,13 +92,14 @@ func initialise(authority, endpoint string, tlsEnabled bool) (pb.SyncResourceMap
 	return rmapClient, nil
 }
 
-func GetAllAccessibleRepos(email string) ([]repository, error) {
+func GetAllAccessibleRepos(email string) ([]repository, string, string, error) {
 	client, err := initialise("es-resource-map-service-v2", "es-resource-map-service-v2.mesh:80", false)
 	if err != nil {
-		return nil, err
+		return nil, "", "", err
 	}
 
-	res, err := client.Traverse(context.Background(), &pb.TraverseRequest{
+	// Create the request
+	request := &pb.TraverseRequest{
 		SourceNodeType: "zomato/member",
 		SourceNodeLabels: []string{
 			"zomato/member",
@@ -118,10 +120,27 @@ func GetAllAccessibleRepos(email string) ([]repository, error) {
 			},
 		},
 		OutputType: "github/repository",
-	})
-	if err != nil {
-		return nil, err
 	}
+
+	// Serialize request
+	requestBytes, err := json.Marshal(request)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("failed to serialize request: %w", err)
+	}
+	requestJSON := string(requestBytes)
+
+	// Make the gRPC call
+	res, err := client.Traverse(context.Background(), request)
+	if err != nil {
+		return nil, requestJSON, "", err
+	}
+
+	// Serialize response
+	responseBytes, err := json.Marshal(res)
+	if err != nil {
+		return nil, requestJSON, "", fmt.Errorf("failed to serialize response: %w", err)
+	}
+	responseJSON := string(responseBytes)
 
 	accessibleRepos := []repository{}
 	for _, output := range res.Output {
@@ -143,5 +162,5 @@ func GetAllAccessibleRepos(email string) ([]repository, error) {
 		}
 	}
 
-	return accessibleRepos, nil
+	return accessibleRepos, requestJSON, responseJSON, nil
 }

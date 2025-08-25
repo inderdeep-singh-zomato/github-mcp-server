@@ -115,9 +115,9 @@ var (
 
 			// Step 5: Output result
 			if hasAccess {
-				fmt.Println("{\"hasAccess\": true}")
+				fmt.Printf("{\"hasAccess\": true, \"request\": %v, \"response\": %v}", validator.GetStoredRequest(), validator.GetStoredResponse())
 			} else {
-				fmt.Println("{\"hasAccess\": false}")
+				fmt.Printf("{\"hasAccess\": false, \"request\": %v, \"response\": %v}", validator.GetStoredRequest(), validator.GetStoredResponse())
 			}
 
 			return nil
