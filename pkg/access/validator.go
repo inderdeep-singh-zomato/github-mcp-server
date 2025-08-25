@@ -93,10 +93,10 @@ func (v *Validator) fetchAccessibleRepositories() ([]string, error) {
 	v.request = requestJSON
 	v.response = responseJSON
 
-	// Convert repository structs to normalized URL format
+	// Convert repository structs to normalized URL format with lowercase owner/repo
 	repoURLs := make([]string, 0, len(repos))
 	for _, repo := range repos {
-		repoURL := fmt.Sprintf("github.com/%s/%s", repo.GetOrg(), repo.GetRepo())
+		repoURL := fmt.Sprintf("github.com/%s/%s", strings.ToLower(repo.GetOrg()), strings.ToLower(repo.GetRepo()))
 		repoURLs = append(repoURLs, repoURL)
 	}
 
@@ -105,6 +105,7 @@ func (v *Validator) fetchAccessibleRepositories() ([]string, error) {
 
 // normalizeRepositoryURL converts various GitHub URL formats to a consistent format
 // Handles: https://github.com/owner/repo, github.com/owner/repo, owner/repo
+// Performs case insensitive matching for owner and repo parameters
 func normalizeRepositoryURL(repoURL string) (string, error) {
 	if repoURL == "" {
 		return "", fmt.Errorf("repository URL cannot be empty")
@@ -117,8 +118,8 @@ func normalizeRepositoryURL(repoURL string) (string, error) {
 			return "", fmt.Errorf("invalid URL format: %w", err)
 		}
 		
-		// Validate that this is a GitHub URL
-		if parsedURL.Host != "github.com" {
+		// Validate that this is a GitHub URL (case insensitive)
+		if strings.ToLower(parsedURL.Host) != "github.com" {
 			return "", fmt.Errorf("unsupported repository URL format: %s", repoURL)
 		}
 		
@@ -132,18 +133,28 @@ func normalizeRepositoryURL(repoURL string) (string, error) {
 			return "", fmt.Errorf("unsupported repository URL format: %s", repoURL)
 		}
 		
+		// Convert owner/repo to lowercase for case insensitive matching
+		path = strings.ToLower(path)
+		
 		return fmt.Sprintf("github.com/%s", path), nil
 	}
 
 	// Handle github.com/owner/repo format
-	if strings.HasPrefix(repoURL, "github.com/") {
+	if strings.HasPrefix(strings.ToLower(repoURL), "github.com/") {
 		path := strings.TrimPrefix(repoURL, "github.com/")
+		if path == repoURL {
+			// Case where the prefix didn't match exactly, try case insensitive
+			path = repoURL[len("github.com/"):]
+		}
 		path = strings.TrimSuffix(path, ".git")
 		
 		// Validate path format (should be owner/repo)
 		if !isValidRepoPath(path) {
 			return "", fmt.Errorf("unsupported repository URL format: %s", repoURL)
 		}
+		
+		// Convert owner/repo to lowercase for case insensitive matching
+		path = strings.ToLower(path)
 		
 		return fmt.Sprintf("github.com/%s", path), nil
 	}
@@ -156,6 +167,9 @@ func normalizeRepositoryURL(repoURL string) (string, error) {
 		if !isValidRepoPath(path) {
 			return "", fmt.Errorf("unsupported repository URL format: %s", repoURL)
 		}
+		
+		// Convert owner/repo to lowercase for case insensitive matching
+		path = strings.ToLower(path)
 		
 		return fmt.Sprintf("github.com/%s", path), nil
 	}

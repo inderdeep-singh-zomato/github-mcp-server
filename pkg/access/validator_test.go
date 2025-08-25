@@ -96,6 +96,43 @@ func TestValidator_IsRepositoryAccessible(t *testing.T) {
 			expectAccess: false,
 			expectError:  true,
 		},
+		// Case insensitive test cases
+		{
+			name:        "accessible repo - uppercase owner",
+			repoURL:     "github.com/USER/repo1",
+			expectAccess: true,
+			expectError:  false,
+		},
+		{
+			name:        "accessible repo - uppercase repo name",
+			repoURL:     "github.com/user/REPO1",
+			expectAccess: true,
+			expectError:  false,
+		},
+		{
+			name:        "accessible repo - mixed case",
+			repoURL:     "github.com/UsEr/RePoSiToRy1",
+			expectAccess: false, // This should be false since "RePoSiToRy1" != "repo1"
+			expectError:  false,
+		},
+		{
+			name:        "accessible repo - mixed case https",
+			repoURL:     "https://github.com/USER/REPO1",
+			expectAccess: true,
+			expectError:  false,
+		},
+		{
+			name:        "accessible repo - mixed case short format",
+			repoURL:     "USER/REPO1",
+			expectAccess: true,
+			expectError:  false,
+		},
+		{
+			name:        "accessible repo - mixed case with .git",
+			repoURL:     "https://github.com/USER/REPO1.git",
+			expectAccess: true,
+			expectError:  false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -213,6 +250,91 @@ func TestNormalizeRepositoryURL(t *testing.T) {
 			input:       "https://invalid-url",
 			expected:    "",
 			expectError: true,
+		},
+		// Case insensitive test cases
+		{
+			name:        "https URL - uppercase owner",
+			input:       "https://github.com/OWNER/repo",
+			expected:    "github.com/owner/repo",
+			expectError: false,
+		},
+		{
+			name:        "https URL - uppercase repo",
+			input:       "https://github.com/owner/REPO",
+			expected:    "github.com/owner/repo",
+			expectError: false,
+		},
+		{
+			name:        "https URL - mixed case",
+			input:       "https://github.com/OwNeR/RePoSiToRy",
+			expected:    "github.com/owner/repository",
+			expectError: false,
+		},
+		{
+			name:        "https URL - mixed case with .git",
+			input:       "https://github.com/OwNeR/RePoSiToRy.git",
+			expected:    "github.com/owner/repository",
+			expectError: false,
+		},
+		{
+			name:        "github.com prefix - uppercase owner",
+			input:       "github.com/OWNER/repo",
+			expected:    "github.com/owner/repo",
+			expectError: false,
+		},
+		{
+			name:        "github.com prefix - uppercase repo",
+			input:       "github.com/owner/REPO",
+			expected:    "github.com/owner/repo",
+			expectError: false,
+		},
+		{
+			name:        "github.com prefix - mixed case",
+			input:       "github.com/OwNeR/RePoSiToRy",
+			expected:    "github.com/owner/repository",
+			expectError: false,
+		},
+		{
+			name:        "github.com prefix - mixed case with .git",
+			input:       "github.com/OwNeR/RePoSiToRy.git",
+			expected:    "github.com/owner/repository",
+			expectError: false,
+		},
+		{
+			name:        "short format - uppercase owner",
+			input:       "OWNER/repo",
+			expected:    "github.com/owner/repo",
+			expectError: false,
+		},
+		{
+			name:        "short format - uppercase repo",
+			input:       "owner/REPO",
+			expected:    "github.com/owner/repo",
+			expectError: false,
+		},
+		{
+			name:        "short format - mixed case",
+			input:       "OwNeR/RePoSiToRy",
+			expected:    "github.com/owner/repository",
+			expectError: false,
+		},
+		{
+			name:        "short format - mixed case with .git",
+			input:       "OwNeR/RePoSiToRy.git",
+			expected:    "github.com/owner/repository",
+			expectError: false,
+		},
+		{
+			name:        "case insensitive GitHub.com host",
+			input:       "https://GitHub.COM/owner/repo",
+			expected:    "github.com/owner/repo",
+			expectError: false,
+		},
+		{
+			name:        "case insensitive github.com prefix",
+			input:       "GitHub.COM/owner/repo",
+			expected:    "github.com/owner/repo",
+			expectError: false,
 		},
 	}
 
